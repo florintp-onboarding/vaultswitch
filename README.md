@@ -12,7 +12,7 @@ The current repository is used for initial setup and work with a fast Vault bina
 
 
 ## Install Homebrew (if it is not already present)
-1. Install Homebrew from using
+1. Install Homebrew from [Homebrew](https://brew.sh/)
 * Install and configure [Homebrew direct install](/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 2. Clone this repository
@@ -24,6 +24,13 @@ The current repository is used for initial setup and work with a fast Vault bina
    chmod +rx vaultswitch
    cp -p vaultswitch /opt/homebrew/bin
    ```` 
+### TODO :
+
+  - [x] Validate the Releases by checking the HASHICORP repository
+  - [x] Validate the prebuilt binary version
+  - [x] Suppress the ECHO if not running in interactive mode.
+  - [ ] Check signature of the binary before switch
+  - [x] Enclosed code blocks with `{`
 
 
 ## Review the default Vault versionand variables
@@ -52,21 +59,33 @@ If the Homebrew was correctly installed you do not need to update those variable
    Found binary and switched Vault to 1.15.0. Done.
    ````
 
-- Example 3 ( download and prepare all the Vault versions from 1.14.x using the release direcctory):
+- Example 3 ( download and prepare all the Vault versions from 1.14.x using the release directory):
+   ````shell
+  for v in $(curl -q https://releases.hashicorp.com/vault| grep '<a href="/vault/1.14'| egrep -v 'hsm|beta|-alpha|-rc1|fips'|cut -d '>' -f2 |cut -d '<' -f 1|sort -u |sed 's/vault_//g') ; do
+    vaultswitch $v
+  done
    ````
-   for v in $(curl -q https://releases.hashicorp.com/vault| grep '<a href="/vault/1.14'| egrep -v 'hsm|beta|-alpha|-rc1|fips'|cut -d '>' -f2 |cut -d '<' -f 1|sort -u ) ; do 
-      vaultswitch $v
-   done
-   ````
+   
    The output might look like:
-   ````
+   ````shell
    % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-   100 62902    0 62902    0     0   457k      0 --:--:-- --:--:-- --:--:--  468k
-   Trying to switch to Vault version vault_1.14.0
-    Working... Downloading... https://releases.hashicorp.com/vault/1.14.0/vault_1.14.0_darwin_arm64.zip Done.
+                                    Dload  Upload   Total   Spent    Left  Speed
+   100 67683    0 67683    0     0   926k      0 --:--:-- --:--:-- --:--:-- 1016k
+   Vault Release 1.14.0 found on the HASHICORP repository.
+   Using custom release: 1.14.0
+   Trying to switch to Vault version 1.14.0
+   No valid binary found in Cellar / Homebrew/bin or missing prebuilt archive.
+   Working... Downloading... https://releases.hashicorp.com/vault/1.14.0/vault_1.14.0_darwin_arm64.zip
+   Done.
     Unzipping vault_1.14.0_darwin_arm64.zip... Done.
-   Extracted and switched Vault to 1.14.0. Done.
+    Extracted and switched Vault to 1.14.0. Done.
+   Vault v1.14.0 (13a649f860186dffe3f3a4459814d87191efc321), built 2023-06-19T11:40:23Z
+   Vault Release 1.14.0+ent found on the HASHICORP repository.
+   Using custom release: 1.14.0+ent
+   Trying to switch to Vault version 1.14.0+ent
+   No valid binary found in Cellar / Homebrew/bin or missing prebuilt archive.
+   Working... Downloading... https://releases.hashicorp.com/vault/1.14.0+ent/vault_1.14.0+ent_darwin_arm64.zip
+   Done.
    ...
    Trying to switch to Vault version vault_1.14.4+ent
    Working... Downloading... https://releases.hashicorp.com/vault/1.14.4+ent/vault_1.14.4+ent_darwin_arm64.zip Done.

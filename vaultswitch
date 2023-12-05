@@ -3,21 +3,27 @@
 # The switch consists on: creation of the prebuilt archives of Vault, download the archive, test the archive
 # and install the vault binary into HOMEBREW Cellar directory and link it soft on HOMEBREW bin.
 #
-# Script will preserve the archives into HOMEBREW_CELLAR/vault/prebuilt-vault
 
+# Script will preserve the archives into HOMEBREW_CELLAR/vault/prebuilt-vault
 export DEFAULT_ARCH="prebuilt"
-export DEFAULT_VERSION="1.15.0"
+export DEFAULT_VERSION="1.15.1"
+
+echox () {
+  # sanitize message
+  local message=$(printf "$*"|sed 's/\\n/ /g')
+  [ -t ] && printf '%s\n' "$message" || true
+  return
+}
 
 # Default HOMEBREW_REPOSITORY
-# #export HOMEBREW_REPOSITORY="/opt/homebrew"
+export HOMEBREW_REPOSITORY="/opt/homebrew"
 # Default HOMEBREW_CELLAR
-# #export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
-
+export HOMEBREW_CELLAR="/opt/homebrew/Cellar"
 
 $(uname -a|grep '^Darwin' 1>/dev/null ) 
 if [ $? -gt 0 ] ; then
-	echo "This script is made only for MAC OS's!"
-	exit 1
+  echox "This script is made only for MAC OS's!"
+  exit 1
 fi
 
 export _OLDPWD=$(pwd)
@@ -25,47 +31,98 @@ export ARCH_DIR=$(cd ${HOMEBREW_CELLAR}/vault 2>/dev/null && mkdir -p ${DEFAULT_
 
 if [ "Z${ARCH_DIR}" == "Z" ] ||
    ! cd ${ARCH_DIR} 2>/dev/null ; then
-   echo "Could not open the ARCH ${ARCH_DIR} in the Cellar HOMEBREW directory! Is HOMEBREW correctly installed?" && exit 1 
+   echox "Could not open the ARCH ${ARCH_DIR} in the Cellar HOMEBREW directory! Is HOMEBREW correctly installed?" && exit 1 
 fi
 
-( cd ${HOMEBREW_CELLAR}/vault 2>/dev/null )
-[ $? -gt 0 ] && echo "Could not open the HOMEBREW Cellar directory! Is HOMEBREW correctly installed?" && exit 1 
+if [ "Z${HOMEBREW_CELLAR}" == "Z" ] ||
+   ! cd ${HOMEBREW_CELLAR}/vault 2>/dev/null ; then
+   echox "Could not open the HOMEBREW Cellar directory! Is HOMEBREW correctly installed?" && exit 1 
+fi
 
 # Preserve the archives already downloaded
 for _arch in $(ls -1 |grep -v '.zip') ; do
    [ -f ${_arch} ] && rm -f ${_arch}
 done
 
-# Get the Vault version to switch to default was 1.12.0
+
+# Initialize the latest ENTERPRISE Vault version to switch to.
+# Create an ARRAY with all available versions except the HSM and FIPS ones.
+# Legacy way of getting only the first enterprise versions:
+# DEFAULT_VERSION=$(curl -s https://releases.hashicorp.com/vault/index.json |
+#   jq --raw-output '.versions |= with_entries(select(.key|match("^\\d+\\.\\d+\\.\\d+\\+ent+$"))) | .versions | keys[]' |
+#   sort -rV |
+#   head -n1)
+export ALL_VERSIONS=($(curl -s https://releases.hashicorp.com/vault/index.json | jq --raw-output '.versions |= with_entries(select(.key|match("^\\d+\\.\\d+\\.\\d+"))) | .versions | keys[]' | sort -rV|egrep -v 'hsm|fips'))
+export DEFAULT_VERSION=${ALL_VERSIONS[0]}
 export _vault_version=$1 ; export _vault_version=${_vault_version:-${DEFAULT_VERSION?}}
 
-echo "Trying to switch to Vault version ${_vault_version} "
-export _vault_version=$(echo ${_vault_version}|sed 's/vault_//')
 
-if [ -d ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin ] && 
-   [ -f ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin/vault ] ; then 
-   cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault 2>/dev/null 
-   [ $? -eq 0 ] && ln -s ../Cellar/vault/${_vault_version}/bin/vault vault && echo "Found binary and switched Vault to ${_vault_version}. Done."
-   export _vault_version=""
+if printf '%s\0' "${ALL_VERSIONS[@]}" | grep -F -x -z --  ${_vault_version} >/dev/null
+then
+ {
+  echox "Vault Release ${_vault_version} found on the HASHICORP repository."
+  echox "Using custom release: ${_vault_version?}"
+ }
+else
+ {
+  echox  "These are the available Vault releases: ${ALL_VERSIONS[@]}\n"
+  export _vault_version=${DEFAULT_VERSION?}
+  echox "Vault Release ${_vault_version} not present on the HASHICORP repository! Reverting to ${DEFAULT_VERSION}."
+ }
 fi
 
-# Download the binaries
+
+echox "Trying to switch to Vault version ${_vault_version} "
+export _vault_version=$(echo ${_vault_version}|sed 's/vault_//')
+
+# Already the right version downloaded, then we use this one.
+export _temp_version=""
+[ -f ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin/vault ]  && _temp_version=$(/opt/homebrew/Cellar/vault/${_vault_version}/bin/vault version|cut -d ' ' -f 2)
+
+if printf '%s' "${_temp_version}" | grep -F -x --  v${_vault_version} >/dev/null &&
+   [ -d ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin ] && 
+   [ -f ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin/vault ] &&
+   [ -f vault_${_vault_version}_darwin_arm64.zip ] ; then 
+  {
+   cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault 2>/dev/null 
+   [ $? -eq 0 ] && ln -s ../Cellar/vault/${_vault_version}/bin/vault vault && echox "Found binary and switched Vault to ${_vault_version}. Done."
+   vault version
+   export _vault_version=""
+  }
+else
+  {
+   echox "No valid binary found in Cellar / Homebrew/bin or missing prebuilt archive".
+   # Remove any leftovers
+   rm -f vault_${_i}_darwin_arm64.zip -rf ${HOMEBREW_CELLAR}/vault/${_vault_version}/bin/vault
+  }
+fi
+
+# Download the archive
 for _i in $(echo "${_vault_version}") ; do
-   echo -ne "Working... Downloading... https://releases.hashicorp.com/vault/${_i?}/vault_${_i?}_darwin_arm64.zip "
+ {
+   echox "Working... Downloading... https://releases.hashicorp.com/vault/${_i?}/vault_${_i?}_darwin_arm64.zip "
    test -f vault_${_i}_darwin_arm64.zip && unzip -t -qq "vault_${_i}_darwin_arm64.zip" || wget -q "https://releases.hashicorp.com/vault/${_i?}/vault_${_i?}_darwin_arm64.zip"
-   echo -ne "Done.\n"
-   # Unpack the binaries
-   test -f vault_${_i}_darwin_arm64.zip && ( mkdir -p tmp && echo -ne " Unzipping vault_${_i}_darwin_arm64.zip... " && unzip -qq vault_${_i}_darwin_arm64.zip -d tmp/ && mv tmp/vault vault-${_i} ; rm -rf tmp ; echo "Done.")
+   echox  "Done."
+   # Unpack the archive with binary
+   test -f vault_${_i}_darwin_arm64.zip && ( mkdir -p tmp && echo -ne " Unzipping vault_${_i}_darwin_arm64.zip... " && unzip -qq vault_${_i}_darwin_arm64.zip -d tmp/ && mv tmp/vault vault-${_i} ; rm -rf tmp )
+   echox "Done."
    if  [ -f vault-${_i} ] ; then
-       chmod +rx vault-${_i}
-       mkdir -p ${HOMEBREW_CELLAR}/vault/${_i}/bin
-       rm -f ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault 2>/dev/null
-       cp -p vault-${_i} ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault
-       cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault && ln -s ../Cellar/vault/${_i}/bin/vault vault && echo "Extracted and switched Vault to ${_i}. Done."
+     {
+      chmod +rx vault-${_i}
+      mkdir -p ${HOMEBREW_CELLAR}/vault/${_i}/bin
+      rm -f ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault 2>/dev/null
+      cp -p vault-${_i} ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault
+      cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault && ln -s ../Cellar/vault/${_i}/bin/vault vault && echox "Extracted and switched Vault to ${_i}. Done."
+      vault version
+     }
    else
-       echo "No binary to link..."
+    {
+     echox "Failed to switch the binary! No ARM64 binary vault_${_i?}_darwin_arm64.zip found to link..."
+     echox "Check the HASHICORP repository archives: https://releases.hashicorp.com/vault/${_i?}"
+    }
    fi
+ }
 done
 cd ${_OLDPWD}
-unset _i _arch  _OLDPWD ARCH_DIR _vault_version DEFAULT_VERSION DEFAULT_ARCH 
+unset _i _arch  _OLDPWD ARCH_DIR _vault_version DEFAULT_VERSION DEFAULT_ARCH ALL_VERSIONS _temp_version
 

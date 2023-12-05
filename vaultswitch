@@ -11,7 +11,9 @@ export DEFAULT_VERSION="1.15.1"
 echox () {
   # sanitize message
   local message=$(printf "$*"|sed 's/\\n/ /g')
-  [ -t ] && printf '%s\n' "$message" || true
+  local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  [ -t ] && printf '%s\n' "[$timestamp] $message" || true
+#  [ -t ] && printf '%s\n' "$message" || true
   return
 }
 
@@ -86,7 +88,7 @@ if printf '%s' "${_temp_version}" | grep -F -x --  v${_vault_version} >/dev/null
   {
    cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault 2>/dev/null 
    [ $? -eq 0 ] && ln -s ../Cellar/vault/${_vault_version}/bin/vault vault && echox "Found binary and switched Vault to ${_vault_version}. Done."
-   vault version
+   echox "$(vault version)"
    export _vault_version=""
   }
 else
@@ -113,7 +115,7 @@ for _i in $(echo "${_vault_version}") ; do
       rm -f ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault 2>/dev/null
       cp -p vault-${_i} ${HOMEBREW_CELLAR}/vault/${_i}/bin/vault
       cd ${HOMEBREW_REPOSITORY}/bin && rm -f vault && ln -s ../Cellar/vault/${_i}/bin/vault vault && echox "Extracted and switched Vault to ${_i}. Done."
-      vault version
+      echox "$(vault version)"
      }
    else
     {

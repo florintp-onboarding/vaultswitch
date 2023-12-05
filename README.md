@@ -31,6 +31,7 @@ The current repository is used for initial setup and work with a fast Vault bina
   - [x] Suppress the ECHO if not running in interactive mode.
   - [ ] Check signature of the binary before switch
   - [x] Enclosed code blocks with `{`
+  - [x] Added timestamp on actions performed
 
 
 ## Review the default Vault versionand variables
